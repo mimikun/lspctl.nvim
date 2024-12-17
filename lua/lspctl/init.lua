@@ -1,58 +1,42 @@
 ---@diagnostic disable: undefined-global
-local default_config = require("lspctl.keymap")
+local default_keymap = require("lspctl.config.keymap")
 local actions = require("lspctl.actions")
+local lspctlcore = require("lspctl.lsp")
 
 local plugin_name = "lspctl"
+local default_lsp_manager = "lspconfig"
+
+---@class lspctl_config
+---@field keymap lspctl_keymap
+---@field manager "lspconfig"|"mason"
 
 ---table
 ---@class lspctl
----@field config lspctl_config
+---@field keymap lspctl_keymap
 local M = {
-  config = default_config,
+  keymap = default_keymap,
+  manager = default_lsp_manager,
   actions = actions,
 }
 
----lspclient object definition
----@class lspclient
----@field id integer
----@field name string
----@field version string
----@field offset_encoding string
----@field filetypes string
----@field initialization_options string
----@field attached string
-
----
----init - initialize
----
----@param opt lspctl_config|nil
----
---local function init(opt)
---  opt = (opt ~= nil and opt ~= {}) and opt or default_config
---  --local augroup = vim.api.nvim_create_augroup("Lspctl", { clear = true })
---  --vim.api.nvim_create_autocmd("FileType", {
---  --  group = augroup,
---  --  pattern = { "lspctl", },
---  --  callback = function()
---  --    vim.keymap.set("n", opt.info, "</<C-x><C-o>", { noremap = true, silent = true, buffer = true })
---  --  end,
---  --})
---end
 
 ---
 ---setup - setup with initialize
 ---
----@param opt lspctl_config|nil
+---@param opt lspctl_config|nil config
 ---
 M.setup = function(opt)
   vim.api.nvim_create_user_command('Lspctl', function()
     M.run();
   end, {})
-  --init(opt)
+
+  -- set config
+  M.keymap = opt and opt.keymap or default_keymap
+  M.manager = opt and opt.manager or default_lsp_manager
 end
 
 M.run = function()
-  local clients = M.get_clients()
+  local clients = lspctlcore.get_all_clients({ manager = M.manager })
   M.render(clients)
 end
 
@@ -65,7 +49,6 @@ M.render = function(clients)
   local Popup = require("nui.popup")
   local Layout = require("nui.layout")
   local EM = require("lspctl.ext.menu")
-  --local event = require("nui.utils.autocmd").event
 
   local popup_head = Popup({
     border = {
@@ -75,7 +58,7 @@ M.render = function(clients)
 
   local lines = {}
   for _, v in pairs(clients) do
-    local m = EM.item(v.name, { id = v.id, attached = v.attached })
+    local m = EM.item(v.name, { attached = v.attached })
     table.insert(lines, m)
   end
 
@@ -85,10 +68,6 @@ M.render = function(clients)
 
   local menu_options = {
     position = "50%",
-    size = {
-      width = 25,
-      height = 5,
-    },
     border = {
       style = "single",
       text = {
@@ -113,14 +92,7 @@ M.render = function(clients)
     end,
   })
 
-  --menu:map("n", { M.config.start }, actions.start, { c = clients })
-  --menu:map("n", { M.config.stop }, actions.stop, { c = clients })
-  --menu:map("n", { M.config.restart }, actions.restart, { c = clients })
   M.actions.clients = clients
-  menu:map("n", M.config.start, M.actions.start, {})
-  menu:map("n", M.config.stop, M.actions.stop, {})
-  menu:map("n", M.config.restart, M.actions.restart, {})
-
 
   local popup_body = Popup({
     enter = true,
@@ -128,26 +100,13 @@ M.render = function(clients)
     border = {
       style = "rounded",
     },
-    --position = "50%",
-    --size = {
-    --  width = "80%",
-    --  height = "60%",
-    --},
-    --buf_options = {
-    --  modifiable = false,
-    --  readonly = true,
-    --  --buftype = "lspctl",
-    --  --filetype = "lspctl",
-    --  --bt = "lspctl",
-    --  --ft = "lspctl",
-    --},
   })
   local layout = Layout(
     {
       position = "50%",
       size = {
         width = "60%",
-        height = "40%",
+        height = "50%",
       },
     },
     Layout.Box({
@@ -166,35 +125,11 @@ M.render = function(clients)
 
   local gb = vim.api.nvim_get_current_buf()
   vim.api.nvim_set_option_value("filetype", plugin_name, { buf = gb })
-end
 
----
---- get_clients - クライアント取得
----
---- @return lspclient[]
----
-M.get_clients = function()
-  local clients = vim.lsp.get_clients()
-  local bn = vim.api.nvim_get_current_buf()
-
-  local all_clients = {}
-  for _, client in pairs(clients) do
-    local attached_buffer = client.attached_buffers[bn]
-    local is_attached = attached_buffer ~= nil and attached_buffer == true
-    local c = {
-      id = client.id,
-      name = client.name,
-      version = client.version,
-      offset_encoding = client.offset_encoding,
-      filetypes = client.filetypes,
-      initialization_options = client.initialization_options,
-      attached = is_attached,
-    }
-    --table.insert(all_clients, c)
-    all_clients[client.name] = c
-  end
-
-  return all_clients
+  local opt = { buffer = gb }
+  menu:map("n", M.keymap.start, M.actions.start, opt)
+  menu:map("n", M.keymap.stop, M.actions.stop, opt)
+  menu:map("n", M.keymap.restart, M.actions.restart, opt)
 end
 
 return M
