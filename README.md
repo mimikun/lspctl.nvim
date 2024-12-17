@@ -1,93 +1,115 @@
-# nvim-lua-plugin-template
+# lspctl.nvim
 
-This repository is a template for Neovim plugins written in Lua.
+## INTRODUCTIONS - 概要
 
-The intention is that you use this template to create a new repository where you then adapt this readme and add your plugin code.
-The template includes the following:
+> a simple list for lsp client provided by [nui.nvim](https://github.com/MunifTanjim/nui.nvim)
 
-- GitHub workflows and configurations to run linters and tests
-- Packaging of tagged releases and upload to [LuaRocks][luarocks]
-  if a [`LUAROCKS_API_KEY`][luarocks-api-key] is added
-  to the [GitHub Actions secrets][gh-actions-secrets]
-- Minimal test setup:
-  - A `scm` [rockspec][rockspec-format], `nvim-lua-plugin-scm-1.rockspec`
-  - A `.busted` file
-- EditorConfig
-- A .luacheckrc
+`lspctl` is show `floating window` sourced by `LspInfo` and provide related actions for
+you
+`lspctl` は `LspInfo` を `floating window` を利用して表示するプラグインです
 
+Also, you can `start`, `stop`, `restart` for the displayed plugin
+また、表示しているプラグインに対して `start`, `stop`, `restart を行うことができます
 
-To get started writing a Lua plugin, I recommend reading `:help lua-guide` and
-`:help write-plugin`.
+## VERSIONS - バージョニング
 
-## Scope
+- feature / 最新版:
+  - https://github.com/clxmochamalefic/lspctl.nvim
+- stable / 安定版:
+  - nothing yet / まだありません
 
-Anything that the majority of plugin authors will want to have is in scope of
-this starter template. Anything that is controversial is out-of-scope.
+## HOW TO INSTALLATION - インストール方法
 
-## Usage
+> [!NOTE]
+> all examples are written in |lazy.nvim|
+> 以下の例はすべて |lazy.nvim| で書かれています
 
-- Click [Use this template][use-this-template]. Do not fork.
-- Rename `nvim-lua-plugin-scm-1.rockspec` and change the `package` name
-  to the name of your plugin.
+### VANILLA - 最小構成
 
-## Template License
-
-The template itself is licensed under the [MIT license](https://en.wikipedia.org/wiki/MIT_License).
-The template doesn't include a LICENSE file. You should add one after creating your repository.
-
----
-
-
-The remainder of the README is text that can be preserved in your plugin:
-
----
-
-
-## Development
-
-### Run tests
-
-
-Running tests requires either
-
-- [luarocks][luarocks]
-- or [busted][busted] and [nlua][nlua]
-
-to be installed[^1].
-
-[^1]: The test suite assumes that `nlua` has been installed
-      using luarocks into `~/.luarocks/bin/`.
-
-You can then run:
-
-```bash
-luarocks test --local
-# or
-busted
+```lua
+  {
+    "clxmochamalefic/lspctl.nvim"
+    dependencies = {
+      "MunifTanjim/nui.nvim",
+    },
+    lazy = true,
+    cmd = { "Lspctl", },
+    config = function()
+      require("lspctl").setup()
+    end,
+  },
 ```
 
-Or if you want to run a single test file:
+### with KEYBIND - キーバインドあり
 
-```bash
-luarocks test spec/path_to_file.lua --local
-# or
-busted spec/path_to_file.lua
+```lua
+  {
+    "clxmochamalefic/lspctl.nvim"
+    dependencies = {
+      "MunifTanjim/nui.nvim",
+    },
+    lazy = true,
+    cmd = { "Lspctl", },
+    opt = {
+      -- this binds are default, you can change it
+      -- ここの設定はデフォルトですから、ご自由に変更してください
+      info = "h",
+      start = "s",
+      stop = "x",
+      restart = "r",
+      close = "q",
+    },
+    config = function(_, opt)
+      require("lspctl").setup(opt)
+    end,
+  },
 ```
 
-If you see an error like `module 'busted.runner' not found`:
+## HOW TO USE - 使い方
 
-```bash
-eval $(luarocks path --no-bin)
-```
+### English
 
-For this to work you need to have Lua 5.1 set as your default version for
-luarocks. If that's not the case you can pass `--lua-version 5.1` to all the
-luarocks commands above.
+1. `:Lspctl` to open lspctl window
+2. the window is display that running LSP server name
+  - TODO: in time, `lspctl` is only show active LSP server name
+    that is unimplemented, I will fix it to show all installed LSP server name
+3. you can use `j` or `k` to move cursor and select LSP server
+4. and you can execute an action if press to configured binded key
+   (see also => `:help lspctl-interface-key-bindings`)
 
-[rockspec-format]: https://github.com/luarocks/luarocks/wiki/Rockspec-format
-[luarocks]: https://luarocks.org
-[luarocks-api-key]: https://luarocks.org/settings/api-keys
-[gh-actions-secrets]: https://docs.github.com/en/actions/security-guides/encrypted-secrets#creating-encrypted-secrets-for-a-repository
-[busted]: https://lunarmodules.github.io/busted/
-[nlua]: https://github.com/mfussenegger/nlua
-[use-this-template]: https://github.com/new?template_name=nvim-lua-plugin-template&template_owner=nvim-lua
+### 日本語
+
+1. `:Lspctl` で lspctl のウィンドウを開きます
+2. `lspctl` のウィンドウに起動中のLSPサーバ名が表示されます
+  - TODO: 現状は現在アクティブなバッファのLSPサーバ名のみ表示されます
+    これは未実装箇所で、インストール済みのLSPサーバ名のすべてを表示するように修正予定です
+3. `j` / `k` でカーソル移動を実施し、任意のLSPサーバを選択します
+4. キーバインドで設定しているキーを押すことで、
+   選択したLSPサーバに対してアクションを実行します
+   (詳しくは `:help lspctl-interface-key-bindings` を参照してください)
+
+## INTERFANCE - インターフェース
+
+### COMMANDS - コマンド
+
+#### :Lspctl
+
+show |lspctl| ui window
+|lspctl| のウィンドウを表示します
+
+### ACTIONS - アクション
+
+#### start
+
+start selected LSP server
+選択した LSP server を起動します
+
+#### stop
+
+stop selected LSP server
+選択した LSP server を終了します
+
+#### restart
+
+restart selected LSP server
+選択した LSP server を再起動します
