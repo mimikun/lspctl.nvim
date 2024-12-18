@@ -101,6 +101,9 @@ components.get_menu = function(lines)
   if not components.menu then
     components.menu = EM(plugin_opts.menu, {
       lines = lines,
+      keymap = {
+        close = { "<Esc>", M.keymap.close },
+      },
       on_close = function()
         components.layout:hide()
       end,
@@ -141,7 +144,7 @@ M.get_action_help_text = function()
   return "[lspctl] start: " .. M.keymap.start ..
       " / stop: " .. M.keymap.stop ..
       " / restart: " .. M.keymap.restart ..
-      " / quit: <ESC>"
+      " / quit: <ESC> or " .. M.keymap.close
 end
 
 ---
