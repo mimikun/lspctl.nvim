@@ -1,94 +1,43 @@
 ---@diagnostic disable: undefined-global
-local default_config = require("lspctl.keymap")
+local NuiText = require("nui.text")
+local NuiPopup = require("nui.popup")
+local NuiLayout = require("nui.layout")
+local EM = require("lspctl.ext.menu")
+
+local default_keymap = require("lspctl.config.keymap")
 local actions = require("lspctl.actions")
+local lspctlcore = require("lspctl.lsp")
 
 local plugin_name = "lspctl"
+local default_lsp_manager = "lspconfig"
+
+---@class lspctl_config
+---@field keymap lspctl_keymap
+---@field manager "lspconfig"|"mason"
 
 ---table
 ---@class lspctl
----@field config lspctl_config
+---@field keymap lspctl_keymap
 local M = {
-  config = default_config,
+  keymap = default_keymap,
+  manager = default_lsp_manager,
   actions = actions,
 }
 
----lspclient object definition
----@class lspclient
----@field id integer
----@field name string
----@field version string
----@field offset_encoding string
----@field filetypes string
----@field initialization_options string
----@field attached string
+---components
+---@class lspctl_components
+---@field header_popup table|nil
+---@field menu table|nil
+---@field layout table|nil
+local components = {
+  header_popup = nil,
+  menu = nil,
+  layout = nil,
+}
 
----
----init - initialize
----
----@param opt lspctl_config|nil
----
---local function init(opt)
---  opt = (opt ~= nil and opt ~= {}) and opt or default_config
---  --local augroup = vim.api.nvim_create_augroup("Lspctl", { clear = true })
---  --vim.api.nvim_create_autocmd("FileType", {
---  --  group = augroup,
---  --  pattern = { "lspctl", },
---  --  callback = function()
---  --    vim.keymap.set("n", opt.info, "</<C-x><C-o>", { noremap = true, silent = true, buffer = true })
---  --  end,
---  --})
---end
-
----
----setup - setup with initialize
----
----@param opt lspctl_config|nil
----
-M.setup = function(opt)
-  vim.api.nvim_create_user_command('Lspctl', function()
-    M.run();
-  end, {})
-  --init(opt)
-end
-
-M.run = function()
-  local clients = M.get_clients()
-  M.render(clients)
-end
-
----
----render - 描画
----
----@param clients lspclient[]
----
-M.render = function(clients)
-  local Popup = require("nui.popup")
-  local Layout = require("nui.layout")
-  local EM = require("lspctl.ext.menu")
-  --local event = require("nui.utils.autocmd").event
-
-  local popup_head = Popup({
-    border = {
-      style = "double",
-    },
-  })
-
-  local lines = {}
-  for _, v in pairs(clients) do
-    local m = EM.item(v.name, { id = v.id, attached = v.attached })
-    table.insert(lines, m)
-  end
-
-  if #lines < 1 then
-    table.insert(lines, EM.item("No Lsp"))
-  end
-
-  local menu_options = {
+local plugin_opts = {
+  menu = {
     position = "50%",
-    size = {
-      width = 25,
-      height = 5,
-    },
     border = {
       style = "single",
       text = {
@@ -99,102 +48,156 @@ M.render = function(clients)
     win_options = {
       winhighlight = "Normal:Normal,FloatBorder:Normal",
     },
-    keymap = {
-    },
   }
+}
 
-  local menu = EM(menu_options, {
-    lines = lines,
-    on_close = function()
-      print("Menu Closed!")
-    end,
-    on_submit = function(item)
-      print("Menu Submitted: ", item.text)
-    end,
-  })
+---
+---setup - setup with initialize
+---
+---@param opt lspctl_config|nil config
+---
+M.setup = function(opt)
+  vim.api.nvim_create_user_command('Lspctl', function()
+    M.run();
+  end, {})
 
-  --menu:map("n", { M.config.start }, actions.start, { c = clients })
-  --menu:map("n", { M.config.stop }, actions.stop, { c = clients })
-  --menu:map("n", { M.config.restart }, actions.restart, { c = clients })
-  M.actions.clients = clients
-  menu:map("n", M.config.start, M.actions.start, {})
-  menu:map("n", M.config.stop, M.actions.stop, {})
-  menu:map("n", M.config.restart, M.actions.restart, {})
+  -- set config
+  M.keymap = opt and opt.keymap or default_keymap
+  M.manager = opt and opt.manager or default_lsp_manager
+end
 
+M.run = function()
+  local clients = lspctlcore.get_all_clients({ manager = M.manager })
+  M.render(clients)
+end
 
-  local popup_body = Popup({
-    enter = true,
-    focusable = true,
-    border = {
-      style = "rounded",
+---
+---nui.menu用のitemリストを取得
+---
+---@param clients lspclient[]
+---
+components.get_menu_item_list = function(clients)
+  local lines = {}
+  for _, v in pairs(clients) do
+    local m = EM.item(v.name, { attached = v.attached })
+    table.insert(lines, m)
+  end
+
+  return lines
+end
+
+---
+---get_component_menu - nuiレイアウトのコンポーネントとしてのmenuを取得
+---
+---@param lines table
+---
+components.get_menu = function(lines)
+  -- なかったら `ないです表示`
+  if #lines < 1 then
+    table.insert(lines, EM.item("No Lsp"))
+  end
+
+  -- menu
+  if not components.menu then
+    components.menu = EM(plugin_opts.menu, {
+      lines = lines,
+      keymap = {
+        close = { "<Esc>", M.keymap.close },
+      },
+      on_close = function()
+        components.layout:hide()
+      end,
+    })
+  end
+
+  -- box for menu-wrapped
+  local menu_box = NuiLayout.Box(components.menu, {
+    size = {
+      width = "100%",
+      height = "90%",
     },
-    --position = "50%",
-    --size = {
-    --  width = "80%",
-    --  height = "60%",
-    --},
-    --buf_options = {
-    --  modifiable = false,
-    --  readonly = true,
-    --  --buftype = "lspctl",
-    --  --filetype = "lspctl",
-    --  --bt = "lspctl",
-    --  --ft = "lspctl",
-    --},
+    dir = "col"
   })
-  local layout = Layout(
+
+  return menu_box
+end
+
+components.get_header = function()
+  if not components.header_popup then
+    components.header_popup = NuiPopup({
+      enter = true,
+      focusable = false,
+      border = {
+        style = "rounded",
+      },
+    })
+  end
+
+  local header_box = NuiLayout.Box(components.header_popup, {
+    size = "10%",
+  })
+
+  return header_box
+end
+
+M.get_action_help_text = function()
+  return "[lspctl] start: " .. M.keymap.start ..
+      " / stop: " .. M.keymap.stop ..
+      " / restart: " .. M.keymap.restart ..
+      " / quit: <ESC> or " .. M.keymap.close
+end
+
+---
+---render - 描画
+---
+---@param clients lspclient[]
+---
+M.render = function(clients)
+  if components.layout then
+    components.layout:show()
+    if components.header_popup then
+      vim.api.nvim_buf_set_lines(components.header_popup.bufnr, 0, 1, false, { M.get_action_help_text() })
+    end
+    return
+  end
+
+  M.actions.clients = clients
+  local lines = components.get_menu_item_list(clients)
+  local menu_box = components.get_menu(lines)
+  local header_box = components.get_header()
+
+  local layout_box = NuiLayout.Box({
+    header_box,
+    menu_box
+  }, {
+    dir = "col",
+  })
+
+  components.layout = NuiLayout(
     {
       position = "50%",
       size = {
         width = "60%",
-        height = "40%",
+        height = "50%",
       },
     },
-    Layout.Box({
-      Layout.Box(popup_head, { size = "10%" }),
-      Layout.Box(menu, { size = "90%" }),
-    }, {
-      dir = "col",
-    })
+    layout_box
   )
 
-  popup_body:map("n", "q", function()
-    layout:close()
-    layout:unmount()
-  end, {})
-  layout:mount()
+  components.layout:mount()
+
+  -- put header text
+  if components.header_popup then
+    vim.api.nvim_buf_set_lines(components.header_popup.bufnr, 0, 1, false, { M.get_action_help_text() })
+  end
 
   local gb = vim.api.nvim_get_current_buf()
   vim.api.nvim_set_option_value("filetype", plugin_name, { buf = gb })
-end
 
----
---- get_clients - クライアント取得
----
---- @return lspclient[]
----
-M.get_clients = function()
-  local clients = vim.lsp.get_clients()
-  local bn = vim.api.nvim_get_current_buf()
-
-  local all_clients = {}
-  for _, client in pairs(clients) do
-    local attached_buffer = client.attached_buffers[bn]
-    local is_attached = attached_buffer ~= nil and attached_buffer == true
-    local c = {
-      id = client.id,
-      name = client.name,
-      version = client.version,
-      offset_encoding = client.offset_encoding,
-      filetypes = client.filetypes,
-      initialization_options = client.initialization_options,
-      attached = is_attached,
-    }
-    --table.insert(all_clients, c)
-    all_clients[client.name] = c
-  end
-
-  return all_clients
+  local opt = { buffer = gb }
+  components.menu:map("n", M.keymap.start, M.actions.start, opt)
+  components.menu:map("n", M.keymap.stop, M.actions.stop, opt)
+  components.menu:map("n", M.keymap.restart, M.actions.restart, opt)
 end
 
 return M
