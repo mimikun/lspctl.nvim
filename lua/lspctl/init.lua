@@ -28,9 +28,11 @@ local M = {
 ---@class lspctl_components
 ---@field header_popup table|nil
 ---@field menu table|nil
+---@field layout table|nil
 local components = {
   header_popup = nil,
   menu = nil,
+  layout = nil,
 }
 
 local plugin_opts = {
@@ -100,10 +102,7 @@ components.get_menu = function(lines)
     components.menu = EM(plugin_opts.menu, {
       lines = lines,
       on_close = function()
-        print("Menu Closed!")
-      end,
-      on_submit = function(item)
-        print("Menu Submitted: ", item.text)
+        components.layout:hide()
       end,
     })
   end
@@ -151,6 +150,14 @@ end
 ---@param clients lspclient[]
 ---
 M.render = function(clients)
+  if components.layout then
+    components.layout:show()
+    if components.header_popup then
+      vim.api.nvim_buf_set_lines(components.header_popup.bufnr, 0, 1, false, { M.get_action_help_text() })
+    end
+    return
+  end
+
   M.actions.clients = clients
   local lines = components.get_menu_item_list(clients)
   local menu_box = components.get_menu(lines)
@@ -163,7 +170,7 @@ M.render = function(clients)
     dir = "col",
   })
 
-  local layout = NuiLayout(
+  components.layout = NuiLayout(
     {
       position = "50%",
       size = {
@@ -174,7 +181,7 @@ M.render = function(clients)
     layout_box
   )
 
-  layout:mount()
+  components.layout:mount()
 
   -- put header text
   if components.header_popup then
