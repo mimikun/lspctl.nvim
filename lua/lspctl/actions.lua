@@ -19,7 +19,7 @@ function M:stop()
   local name = get_name()
   local client = M.clients[name]
   if client then
-    vim.print("[lspctl]start: " .. name)
+    vim.print("[lspctl]stop: " .. name)
     vim.lsp.stop_client(client.id)
   end
 end
