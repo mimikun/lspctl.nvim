@@ -1,4 +1,9 @@
 ---@diagnostic disable: undefined-global
+local NuiText = require("nui.text")
+local NuiPopup = require("nui.popup")
+local NuiLayout = require("nui.layout")
+local EM = require("lspctl.ext.menu")
+
 local default_keymap = require("lspctl.config.keymap")
 local actions = require("lspctl.actions")
 local lspctlcore = require("lspctl.lsp")
@@ -19,6 +24,30 @@ local M = {
   actions = actions,
 }
 
+---components
+---@class lspctl_components
+---@field header_popup table|nil
+---@field menu table|nil
+local components = {
+  header_popup = nil,
+  menu = nil,
+}
+
+local plugin_opts = {
+  menu = {
+    position = "50%",
+    border = {
+      style = "single",
+      text = {
+        top = "[LspController]",
+        top_align = "center",
+      },
+    },
+    win_options = {
+      winhighlight = "Normal:Normal,FloatBorder:Normal",
+    },
+  }
+}
 
 ---
 ---setup - setup with initialize
@@ -41,67 +70,100 @@ M.run = function()
 end
 
 ---
----render - 描画
+---nui.menu用のitemリストを取得
 ---
 ---@param clients lspclient[]
 ---
-M.render = function(clients)
-  local Popup = require("nui.popup")
-  local Layout = require("nui.layout")
-  local EM = require("lspctl.ext.menu")
-
-  local popup_head = Popup({
-    border = {
-      style = "double",
-    },
-  })
-
+components.get_menu_item_list = function(clients)
   local lines = {}
   for _, v in pairs(clients) do
     local m = EM.item(v.name, { attached = v.attached })
     table.insert(lines, m)
   end
 
+  return lines
+end
+
+---
+---get_component_menu - nuiレイアウトのコンポーネントとしてのmenuを取得
+---
+---@param lines table
+---
+components.get_menu = function(lines)
+  -- なかったら `ないです表示`
   if #lines < 1 then
     table.insert(lines, EM.item("No Lsp"))
   end
 
-  local menu_options = {
-    position = "50%",
-    border = {
-      style = "single",
-      text = {
-        top = "[LspController]",
-        top_align = "center",
+  -- menu
+  if not components.menu then
+    components.menu = EM(plugin_opts.menu, {
+      lines = lines,
+      on_close = function()
+        print("Menu Closed!")
+      end,
+      on_submit = function(item)
+        print("Menu Submitted: ", item.text)
+      end,
+    })
+  end
+
+  -- box for menu-wrapped
+  local menu_box = NuiLayout.Box(components.menu, {
+    size = {
+      width = "100%",
+      height = "90%",
+    },
+    dir = "col"
+  })
+
+  return menu_box
+end
+
+components.get_header = function()
+  if not components.header_popup then
+    components.header_popup = NuiPopup({
+      enter = true,
+      focusable = false,
+      border = {
+        style = "rounded",
       },
-    },
-    win_options = {
-      winhighlight = "Normal:Normal,FloatBorder:Normal",
-    },
-    keymap = {
-    },
-  }
+    })
+  end
 
-  local menu = EM(menu_options, {
-    lines = lines,
-    on_close = function()
-      print("Menu Closed!")
-    end,
-    on_submit = function(item)
-      print("Menu Submitted: ", item.text)
-    end,
+  local header_box = NuiLayout.Box(components.header_popup, {
+    size = "10%",
   })
 
+  return header_box
+end
+
+M.get_action_help_text = function()
+  return "[lspctl] start: " .. M.keymap.start ..
+      " / stop: " .. M.keymap.stop ..
+      " / restart: " .. M.keymap.restart ..
+      " / quit: <ESC>"
+end
+
+---
+---render - 描画
+---
+---@param clients lspclient[]
+---
+M.render = function(clients)
   M.actions.clients = clients
+  local lines = components.get_menu_item_list(clients)
+  local menu_box = components.get_menu(lines)
+  local header_box = components.get_header()
 
-  local popup_body = Popup({
-    enter = true,
-    focusable = true,
-    border = {
-      style = "rounded",
-    },
+  local layout_box = NuiLayout.Box({
+    header_box,
+    menu_box
+  }, {
+    dir = "col",
   })
-  local layout = Layout(
+
+  local layout = NuiLayout(
     {
       position = "50%",
       size = {
@@ -109,27 +171,23 @@ M.render = function(clients)
         height = "50%",
       },
     },
-    Layout.Box({
-      Layout.Box(popup_head, { size = "10%" }),
-      Layout.Box(menu, { size = "90%" }),
-    }, {
-      dir = "col",
-    })
+    layout_box
   )
 
-  popup_body:map("n", "q", function()
-    layout:close()
-    layout:unmount()
-  end, {})
   layout:mount()
+
+  -- put header text
+  if components.header_popup then
+    vim.api.nvim_buf_set_lines(components.header_popup.bufnr, 0, 1, false, { M.get_action_help_text() })
+  end
 
   local gb = vim.api.nvim_get_current_buf()
   vim.api.nvim_set_option_value("filetype", plugin_name, { buf = gb })
 
   local opt = { buffer = gb }
-  menu:map("n", M.keymap.start, M.actions.start, opt)
-  menu:map("n", M.keymap.stop, M.actions.stop, opt)
-  menu:map("n", M.keymap.restart, M.actions.restart, opt)
+  components.menu:map("n", M.keymap.start, M.actions.start, opt)
+  components.menu:map("n", M.keymap.stop, M.actions.stop, opt)
+  components.menu:map("n", M.keymap.restart, M.actions.restart, opt)
 end
 
 return M
